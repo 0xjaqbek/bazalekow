@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Baza leków ZRM — skanuj kody DataMatrix i zarządzaj lekami Zespołu Ratownictwa Medycznego" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Baza Leków ZRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header class="top-bar" id="top-bar">
+      <div class="top-bar__left">
+        <span class="top-bar__logo">💊</span>
+        <h1 class="top-bar__title">Baza Leków <span class="top-bar__badge">ZRM</span></h1>
+      </div>
+      <div class="top-bar__right">
+        <button class="icon-btn" id="btn-settings" aria-label="Ustawienia" title="Ustawienia">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <!-- Views will be injected here by JS -->
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="bottom-nav__btn active" data-view="scanner" id="nav-scanner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span>Skaner</span>
+      </button>
+      <button class="bottom-nav__btn" data-view="inventory" id="nav-inventory">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Magazyn</span>
+      </button>
+      <button class="bottom-nav__btn" data-view="manual" id="nav-manual">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Dodaj</span>
+      </button>
+    </nav>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal" hidden>
+      <div class="modal">
+        <div class="modal__header">
+          <h2>Ustawienia</h2>
+          <button class="icon-btn modal__close" id="settings-close" aria-label="Zamknij">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="form-group">
+            <label for="api-key-input">Klucz API (DrugsAPI)</label>
+            <div class="input-row">
+              <input type="password" id="api-key-input" class="input" placeholder="Wklej klucz API..." autocomplete="off" />
+              <button class="btn btn--sm" id="toggle-key-visibility" title="Pokaż/ukryj">👁</button>
+            </div>
+            <small class="form-hint">Klucz z <a href="https://drugsapi.miniporadnia.pl" target="_blank">drugsapi.miniporadnia.pl</a></small>
+          </div>
+          <div class="form-group">
+            <label for="crew-id-input">ID Zespołu</label>
+            <input type="text" id="crew-id-input" class="input" placeholder="np. ZRM-01" />
+          </div>
+          <div class="form-group">
+            <button class="btn btn--primary" id="btn-save-settings">Zapisz ustawienia</button>
+          </div>
+
+          <hr class="divider" />
+
+          <div class="form-group">
+            <label>Status API</label>
+            <div class="api-status" id="api-status">
+              <span class="status-dot status-dot--unknown"></span>
+              <span id="api-status-text">Nieznany</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <button class="btn btn--outline" id="btn-check-api">Sprawdź połączenie</button>
+          </div>
+          <div id="api-usage-info" class="api-usage" hidden></div>
+
+          <hr class="divider" />
+
+          <div class="form-group">
+            <label>Dane</label>
+            <div class="btn-row">
+              <button class="btn btn--outline" id="btn-export">📥 Eksportuj JSON</button>
+              <label class="btn btn--outline" for="import-file-input" id="btn-import">📤 Importuj JSON</label>
+              <input type="file" id="import-file-input" accept=".json" hidden />
+            </div>
+          </div>
+          <div class="form-group">
+            <button class="btn btn--danger btn--sm" id="btn-clear-all">🗑 Wyczyść wszystkie leki</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan Result Modal -->
+    <div class="modal-overlay" id="scan-result-modal" hidden>
+      <div class="modal modal--slide-up">
+        <div class="modal__header">
+          <h2 id="scan-result-title">Wynik skanu</h2>
+          <button class="icon-btn modal__close" id="scan-result-close" aria-label="Zamknij">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body" id="scan-result-body">
+          <!-- Filled dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
