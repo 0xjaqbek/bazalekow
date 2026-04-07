@@ -81,9 +81,60 @@ export async function addDrug(drug) {
     
     // Update local cache
     _inventoryCache.push(entry);
-    return entry;
+    
+    // Sort array
+    _inventoryCache.sort((a, b) => a.substance.localeCompare(b.substance) || a.productName.localeCompare(b.productName));
   } catch (err) {
     console.error('addDrug error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Add multiple drugs at once via bulk API
+ */
+export async function bulkAddDrugs(drugsArray) {
+  const crewId = getCrewId();
+  
+  const entries = drugsArray.map(drug => ({
+    id: uuidv4(),
+    crewId,
+    substance: drug.substance || '',
+    productName: drug.productName || '',
+    concentration: drug.concentration || '',
+    form: drug.form || '',
+    ean: drug.ean || '',
+    expiryDate: drug.expiryDate || '',
+    batchNumber: drug.batchNumber || '',
+    quantity: parseInt(drug.quantity, 10) || 1,
+    unit: drug.unit || 'szt.',
+    source: drug.source || 'api',
+    apiDrugId: drug.apiDrugId || null,
+    addedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }));
+
+  try {
+    const res = await fetch('/api/bulk-drugs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drugs: entries })
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Failed to bulk add drugs: ${errorText}`);
+    }
+    
+    const { count } = await res.json();
+    
+    // Push successful entries to cache
+    _inventoryCache.push(...entries);
+    _inventoryCache.sort((a, b) => a.substance.localeCompare(b.substance) || a.productName.localeCompare(b.productName));
+    
+    return count;
+  } catch (err) {
+    console.error('bulkAddDrugs error:', err);
     throw err;
   }
 }

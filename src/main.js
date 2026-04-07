@@ -8,7 +8,7 @@ import { parseScan } from './gs1-parser.js';
 import * as api from './api.js';
 import {
   loadInventory, addDrug, updateDrug, deleteDrug, clearInventory,
-  getGroupedInventory, searchInventory, getExpiryStatus, getCrewId, setCrewId
+  getGroupedInventory, searchInventory, getExpiryStatus, getCrewId, setCrewId, bulkAddDrugs
 } from './inventory.js';
 import { exportInventory, importInventoryFile } from './data-io.js';
 import { ZRM_SUBSTANCES, DRUG_FORMS, DRUG_UNITS } from './substances.js';
@@ -900,9 +900,7 @@ async function searchApiGeneral(query) {
       btn.disabled = true;
       btn.textContent = 'Trwa dodawanie...';
       try {
-        let addedCount = 0;
-        for (const drug of resultsSubset) {
-          await addDrug({
+        const addedCount = await bulkAddDrugs(resultsSubset.map(drug => ({
             substance: drug.substCzynna || '',
             productName: drug.nazwa || '',
             concentration: drug.dawka || '',
@@ -912,9 +910,7 @@ async function searchApiGeneral(query) {
             unit: 'szt.',
             source: 'api',
             apiDrugId: drug.id || null
-          });
-          addedCount++;
-        }
+        })));
         showToast(`Pomyślnie dodano ${addedCount} produktów do bazy!`, 'success');
         container.innerHTML = ''; // clear results 
         document.querySelector('.manual-view').scrollTo(0, 0);
