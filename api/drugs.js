@@ -1,9 +1,8 @@
 import { getDb } from './db.js';
 
 export default async function handler(req, res) {
-  const sql = getDb();
-
   try {
+    const sql = getDb();
     // GET: Fetch all drugs for a specific crew
     if (req.method === 'GET') {
       const { crewId } = req.query;

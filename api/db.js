@@ -8,6 +8,22 @@ import { neon, neonConfig } from '@neondatabase/serverless';
  * Environment variables must be set (e.g. DATABASE_URL).
  */
 export function getDb() {
-  const sql = neon(process.env.DATABASE_URL);
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set');
+  }
+  
+  let rawUrl = process.env.DATABASE_URL.trim();
+  
+  // Clean up if the user pasted the entire "psql '...'" CLI command by accident
+  if (rawUrl.startsWith("psql ")) {
+    rawUrl = rawUrl.replace("psql ", "").trim();
+  }
+  if (rawUrl.startsWith("'") && rawUrl.endsWith("'")) {
+    rawUrl = rawUrl.slice(1, -1);
+  } else if (rawUrl.startsWith('"') && rawUrl.endsWith('"')) {
+    rawUrl = rawUrl.slice(1, -1);
+  }
+
+  const sql = neon(rawUrl);
   return sql;
 }
