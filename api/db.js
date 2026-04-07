@@ -14,14 +14,10 @@ export function getDb() {
   
   let rawUrl = process.env.DATABASE_URL.trim();
   
-  // Clean up if the user pasted the entire "psql '...'" CLI command by accident
-  if (rawUrl.startsWith("psql ")) {
-    rawUrl = rawUrl.replace("psql ", "").trim();
-  }
-  if (rawUrl.startsWith("'") && rawUrl.endsWith("'")) {
-    rawUrl = rawUrl.slice(1, -1);
-  } else if (rawUrl.startsWith('"') && rawUrl.endsWith('"')) {
-    rawUrl = rawUrl.slice(1, -1);
+  // Robustly extract the URL part only (handles psql 'url' or "url" or psql url)
+  const match = rawUrl.match(/(postgresql:\/\/[^\s'"]+)/i);
+  if (match) {
+    rawUrl = match[1];
   }
 
   const sql = neon(rawUrl);
