@@ -303,12 +303,34 @@ async function lookupDrugByEan(parsed) {
   }
 
   try {
-    const { data: drugs } = await api.searchByEan(parsed.ean);
+    let drugs = [];
+    let usedEan = parsed.gtin || parsed.ean;
+    
+    // 1st attempt: Original parsed ID (GTIN-14 or EAN-13)
+    const res1 = await api.searchByEan(usedEan);
+    drugs = res1.data || [];
+
+    // 2nd attempt: If 1st failed and we have alternatives
+    if (drugs.length === 0) {
+      if (parsed.gtin && parsed.ean && usedEan !== parsed.ean) {
+        // Try the 13-digit version if we haven't yet
+        const res2 = await api.searchByEan(parsed.ean);
+        drugs = res2.data || [];
+        if (drugs.length > 0) usedEan = parsed.ean;
+      } else if (!parsed.gtin && parsed.ean && parsed.ean.length === 13) {
+        // Try padding with high-level 0 just in case
+        const padded = '0' + parsed.ean;
+        const res3 = await api.searchByEan(padded);
+        drugs = res3.data || [];
+        if (drugs.length > 0) usedEan = padded;
+      }
+    }
 
     if (!drugs || drugs.length === 0) {
       section.innerHTML = `
         <div class="empty-state" style="padding: var(--sp-md);">
-          <p class="empty-state__text">Nie znaleziono leku o EAN: ${parsed.ean}</p>
+          <p class="empty-state__text">Nie znaleziono leku o kodzie: ${usedEan}</p>
+          <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:4px;">Sprawdź czy klucz API jest poprawny w ustawieniach.</div>
           <button class="btn btn--primary mt-md" id="btn-add-manual-from-scan">Dodaj ręcznie</button>
         </div>
       `;

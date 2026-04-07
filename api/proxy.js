@@ -9,9 +9,12 @@ export default async function handler(req, res) {
   const url = `${BASE_URL}${path}`;
 
   const headers = {};
-  // Forward the required headers
-  if (req.headers['x-api-key']) headers['X-API-Key'] = req.headers['x-api-key'];
-  if (req.headers['accept']) headers['Accept'] = req.headers['accept'];
+  // Forward the required headers (case-insensitive check)
+  const apiKey = req.headers['x-api-key'] || req.headers['X-API-Key'];
+  const acceptHeader = req.headers['accept'] || 'application/json';
+  
+  if (apiKey) headers['X-API-Key'] = apiKey;
+  headers['Accept'] = acceptHeader;
 
   try {
     const response = await fetch(url, {
