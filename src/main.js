@@ -871,11 +871,8 @@ async function searchApiGeneral(query) {
     const resultsSubset = drugs.slice(0, 15);
     
     let html = `
-      <div style="margin-top:var(--sp-sm); margin-bottom:var(--sp-sm); display:flex; justify-content:space-between; align-items:center;">
+      <div style="margin-top:var(--sp-sm); margin-bottom:var(--sp-sm);">
         <span style="font-size:var(--font-sm); color:var(--text-secondary);">Znaleziono: ${drugs.length}</span>
-        <button class="btn btn--sm btn--success" id="btn-add-all-api-results">
-          ➕ Dodaj wszystkie (${resultsSubset.length})
-        </button>
       </div>
       <div class="api-results">
     `;
@@ -894,13 +891,17 @@ async function searchApiGeneral(query) {
     html += '</div>';
     container.innerHTML = html;
 
-    // "Add all" handler
-    document.getElementById('btn-add-all-api-results').addEventListener('click', async (e) => {
-      const btn = e.target;
-      btn.disabled = true;
-      btn.textContent = 'Trwa dodawanie...';
-      try {
-        const addedCount = await bulkAddDrugs(resultsSubset.map(drug => ({
+
+
+    // Click to directly add to database
+    container.querySelectorAll('.api-result-card').forEach((card, i) => {
+      card.addEventListener('click', async () => {
+        const drug = resultsSubset[i];
+        card.style.opacity = '0.5';
+        card.style.pointerEvents = 'none';
+        
+        try {
+          await addDrug({
             substance: drug.substCzynna || '',
             productName: drug.nazwa || '',
             concentration: drug.dawka || '',
@@ -910,29 +911,25 @@ async function searchApiGeneral(query) {
             unit: 'szt.',
             source: 'api',
             apiDrugId: drug.id || null
-        })));
-        showToast(`Pomyślnie dodano ${addedCount} produktów do bazy!`, 'success');
-        container.innerHTML = ''; // clear results 
-        document.querySelector('.manual-view').scrollTo(0, 0);
-      } catch (err) {
-        showToast('Błąd podczas dodawania masowego: ' + err.message, 'error');
-        btn.disabled = false;
-        btn.textContent = `➕ Dodaj wszystkie (${resultsSubset.length})`;
-      }
-    });
-
-    // Click to fill form
-    container.querySelectorAll('.api-result-card').forEach((card, i) => {
-      card.addEventListener('click', () => {
-        const drug = drugs[i];
-        document.getElementById('manual-substance').value = drug.substCzynna || '';
-        document.getElementById('manual-product-name').value = drug.nazwa || '';
-        document.getElementById('manual-concentration').value = drug.dawka || '';
-        document.getElementById('manual-ean').value = drug.ean || '';
-        showToast(`Wypełniono danymi: ${drug.nazwa}`, 'success');
-        container.innerHTML = '';
-        // scroll to top
-        document.querySelector('.manual-view').scrollTo(0, 0);
+          });
+          
+          showToast(`Dodano do magazynu: ${drug.nazwa}`, 'success');
+          // Remove the card from the list
+          card.remove();
+          
+          // Optionally update the counter if the span exists
+          const countSpan = container.querySelector('span[style*="font-size:var(--font-sm)"]');
+          if (countSpan) {
+            const currentCount = parseInt(countSpan.textContent.replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(currentCount)) {
+              countSpan.textContent = `Pozostało na liście: ${Math.max(0, currentCount - 1)}`;
+            }
+          }
+        } catch (err) {
+          showToast(`Błąd dodawania: ${err.message}`, 'error');
+          card.style.opacity = '1';
+          card.style.pointerEvents = 'auto';
+        }
       });
     });
   } catch (err) {
