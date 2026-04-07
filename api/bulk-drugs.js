@@ -13,34 +13,41 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing drugs array array' });
     }
 
-    if (drugs.length === 0) {
+    // Filter out invalid items
+    const validDrugs = drugs.filter(d => d && d.id && d.crewId);
+
+    if (validDrugs.length === 0) {
       return res.status(200).json({ success: true, count: 0 });
     }
 
-    let successCount = 0;
+    // Build the values array for multi-row insert
+    const insertValues = validDrugs.map(d => [
+      d.id,
+      d.crewId,
+      d.substance || '',
+      d.productName || '',
+      d.concentration || '',
+      d.form || '',
+      d.ean || '',
+      d.expiryDate || '',
+      d.batchNumber || '',
+      parseInt(d.quantity, 10) || 1,
+      d.unit || 'szt.',
+      d.source || 'api',
+      d.apiDrugId || null,
+      d.addedAt ? new Date(d.addedAt) : new Date(),
+      d.updatedAt ? new Date(d.updatedAt) : new Date()
+    ]);
 
-    for (const d of drugs) {
-      if (!d.id || !d.crewId) continue;
-      
-      try {
-        await sql`
-          INSERT INTO drugs (
-            id, crew_id, substance, product_name, concentration, form, ean, 
-            expiry_date, batch_number, quantity, unit, source, api_drug_id, added_at, updated_at
-          ) VALUES (
-            ${d.id}, ${d.crewId}, ${d.substance || ''}, ${d.productName || ''}, ${d.concentration || ''}, ${d.form || ''}, ${d.ean || ''},
-            ${d.expiryDate || ''}, ${d.batchNumber || ''}, ${d.quantity || 1}, ${d.unit || 'szt.'}, ${d.source || 'api'}, ${d.apiDrugId || null}, 
-            ${new Date(d.addedAt || Date.now())}, ${new Date(d.updatedAt || Date.now())}
-          )
-        `;
-        successCount++;
-      } catch (err) {
-        console.error('Failed to insert drug in bulk:', d.id, err);
-        // We continue inserting others even if one fails
-      }
-    }
+    await sql`
+      INSERT INTO drugs (
+        id, crew_id, substance, product_name, concentration, form, ean, 
+        expiry_date, batch_number, quantity, unit, source, api_drug_id, added_at, updated_at
+      )
+      ${sql(insertValues)}
+    `;
 
-    return res.status(201).json({ success: true, count: successCount });
+    return res.status(201).json({ success: true, count: validDrugs.length });
 
   } catch (error) {
     console.error('API Bulk Error:', error);
