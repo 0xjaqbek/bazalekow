@@ -329,21 +329,94 @@ async function lookupDrugByEan(parsed) {
     if (!drugs || drugs.length === 0) {
       section.innerHTML = `
         <div class="empty-state" style="padding: var(--sp-md);">
-          <p class="empty-state__text">Nie znaleziono leku o kodzie: ${usedEan}</p>
-          <div style="font-size:var(--font-xs); color:var(--text-secondary); margin-top:4px;">Sprawdź czy klucz API jest poprawny w ustawieniach.</div>
-          <button class="btn btn--primary mt-md" id="btn-add-manual-from-scan">Dodaj ręcznie</button>
+          <p class="empty-state__text" style="color:var(--color-accent); font-weight:bold; margin-bottom:var(--sp-xs);">Nie znaleziono leku w bazie API.</p>
+          <p class="empty-state__text" style="font-size:var(--font-xs); color:var(--text-secondary); margin-bottom:var(--sp-md);">
+            Kod: <strong>${usedEan}</strong><br/>
+            Możesz uzupełnić dane ręcznie poniżej:
+          </p>
+          
+          <div class="quick-add-form" style="text-align:left;">
+             <div class="form-group">
+                <label style="font-size:var(--font-xs)">Substancja czynna</label>
+                <input type="text" class="input" id="quick-substance" list="quick-substances-list" placeholder="np. Adrenalinum" />
+                <datalist id="quick-substances-list">
+                  ${ZRM_SUBSTANCES.map(s => `<option value="${escapeHtml(s)}">`).join('')}
+                </datalist>
+             </div>
+             <div class="form-group">
+                <label style="font-size:var(--font-xs)">Nazwa handlowa / Produkt</label>
+                <input type="text" class="input" id="quick-name" placeholder="np. Adrenalina WZF" />
+             </div>
+             <div class="form-row">
+                <div class="form-group">
+                  <label style="font-size:var(--font-xs)">Dawka</label>
+                  <input type="text" class="input" id="quick-conc" placeholder="np. 1 mg/ml" />
+                </div>
+                <div class="form-group">
+                  <label style="font-size:var(--font-xs)">Postać</label>
+                  <select class="input" id="quick-form">
+                    <option value="">— wybierz —</option>
+                    ${DRUG_FORMS.map(f => `<option value="${f}">${f}</option>`).join('')}
+                  </select>
+                </div>
+             </div>
+             <div class="form-row" style="margin-top:var(--sp-xs);">
+                <div class="form-group">
+                  <label style="font-size:var(--font-xs)">Ilość</label>
+                  <input type="number" class="input" id="quick-qty" value="1" min="1" />
+                </div>
+                <div class="form-group">
+                  <label style="font-size:var(--font-xs)">Jednostka</label>
+                  <select class="input" id="quick-unit">
+                    ${DRUG_UNITS.map(u => `<option value="${u}">${u}</option>`).join('')}
+                  </select>
+                </div>
+             </div>
+             <button class="btn btn--success btn--block mt-md" id="btn-quick-add-confirm">✓ Dodaj do magazynu</button>
+             <button class="btn btn--link btn--block mt-sm" id="btn-cancel-quick-add" style="font-size:var(--font-xs)">Anuluj</button>
+          </div>
         </div>
       `;
-      document.getElementById('btn-add-manual-from-scan').onclick = () => {
+
+      document.getElementById('btn-cancel-quick-add').onclick = () => {
         document.getElementById('scan-result-modal').hidden = true;
-        switchView('manual');
-        // Pre-fill EAN
-        setTimeout(() => {
-          const eanInput = document.getElementById('manual-ean');
-          if (eanInput) eanInput.value = parsed.ean || '';
-          const expiryInput = document.getElementById('manual-expiry');
-          if (expiryInput && parsed.expiryFormatted) expiryInput.value = parsed.expiryFormatted;
-        }, 100);
+      };
+
+      document.getElementById('btn-quick-add-confirm').onclick = async (e) => {
+        const name = document.getElementById('quick-name').value.trim();
+        if (!name) {
+          showToast('Podaj nazwę leku', 'error');
+          return;
+        }
+
+        const btn = e.target;
+        btn.disabled = true;
+        btn.textContent = 'Trwa dodawanie...';
+
+        try {
+          const newDrug = {
+            substance: document.getElementById('quick-substance').value.trim(),
+            productName: name,
+            concentration: document.getElementById('quick-conc').value.trim(),
+            form: document.getElementById('quick-form').value,
+            ean: usedEan,
+            expiryDate: parsed.expiryFormatted || '',
+            batchNumber: parsed.batchNumber || '',
+            quantity: parseInt(document.getElementById('quick-qty').value, 10) || 1,
+            unit: document.getElementById('quick-unit').value,
+            source: 'manual_from_scan'
+          };
+
+          await addDrug(newDrug);
+          showToast(`Dodano: ${name}`, 'success');
+          document.getElementById('scan-result-modal').hidden = true;
+          // Refresh inventory if we are on that view
+          if (currentView === 'inventory') renderInventoryView(document.getElementById('main-content'));
+        } catch (err) {
+          showToast(`Błąd: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = '✓ Dodaj do magazynu';
+        }
       };
       return;
     }
