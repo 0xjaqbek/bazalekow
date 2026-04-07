@@ -900,7 +900,9 @@ async function searchApiGeneral(query) {
       btn.disabled = true;
       btn.textContent = 'Trwa dodawanie...';
       try {
-        await Promise.all(resultsSubset.map(drug => addDrug({
+        let addedCount = 0;
+        for (const drug of resultsSubset) {
+          await addDrug({
             substance: drug.substCzynna || '',
             productName: drug.nazwa || '',
             concentration: drug.dawka || '',
@@ -909,13 +911,15 @@ async function searchApiGeneral(query) {
             quantity: 1,
             unit: 'szt.',
             source: 'api',
-            apiDrugId: drug.id
-        })));
-        showToast(`Pomyślnie dodano ${resultsSubset.length} produktów do bazy!`, 'success');
+            apiDrugId: drug.id || null
+          });
+          addedCount++;
+        }
+        showToast(`Pomyślnie dodano ${addedCount} produktów do bazy!`, 'success');
         container.innerHTML = ''; // clear results 
         document.querySelector('.manual-view').scrollTo(0, 0);
       } catch (err) {
-        showToast('Błąd podczas dodawania masowego', 'error');
+        showToast('Błąd podczas dodawania masowego: ' + err.message, 'error');
         btn.disabled = false;
         btn.textContent = `➕ Dodaj wszystkie (${resultsSubset.length})`;
       }
