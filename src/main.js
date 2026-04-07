@@ -868,8 +868,19 @@ async function searchApiGeneral(query) {
       return;
     }
 
-    let html = '<div class="api-results" style="margin-top:var(--sp-sm)">';
-    drugs.slice(0, 15).forEach((drug, i) => {
+    const resultsSubset = drugs.slice(0, 15);
+    
+    let html = `
+      <div style="margin-top:var(--sp-sm); margin-bottom:var(--sp-sm); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:var(--font-sm); color:var(--text-secondary);">Znaleziono: ${drugs.length}</span>
+        <button class="btn btn--sm btn--success" id="btn-add-all-api-results">
+          ➕ Dodaj wszystkie (${resultsSubset.length})
+        </button>
+      </div>
+      <div class="api-results">
+    `;
+
+    resultsSubset.forEach((drug, i) => {
       html += `
         <div class="api-result-card" data-fill-index="${i}">
           <div class="api-result-card__name">${escapeHtml(drug.nazwa)}</div>
@@ -882,6 +893,33 @@ async function searchApiGeneral(query) {
     });
     html += '</div>';
     container.innerHTML = html;
+
+    // "Add all" handler
+    document.getElementById('btn-add-all-api-results').addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = 'Trwa dodawanie...';
+      try {
+        await Promise.all(resultsSubset.map(drug => addDrug({
+            substance: drug.substCzynna || '',
+            productName: drug.nazwa || '',
+            concentration: drug.dawka || '',
+            form: drug.postac || '',
+            ean: drug.ean || '',
+            quantity: 1,
+            unit: 'szt.',
+            source: 'api',
+            apiDrugId: drug.id
+        })));
+        showToast(`Pomyślnie dodano ${resultsSubset.length} produktów do bazy!`, 'success');
+        container.innerHTML = ''; // clear results 
+        document.querySelector('.manual-view').scrollTo(0, 0);
+      } catch (err) {
+        showToast('Błąd podczas dodawania masowego', 'error');
+        btn.disabled = false;
+        btn.textContent = `➕ Dodaj wszystkie (${resultsSubset.length})`;
+      }
+    });
 
     // Click to fill form
     container.querySelectorAll('.api-result-card').forEach((card, i) => {
