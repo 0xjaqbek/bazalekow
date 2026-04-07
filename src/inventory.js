@@ -74,7 +74,10 @@ export async function addDrug(drug) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry)
     });
-    if (!res.ok) throw new Error('Failed to add drug');
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Failed to add drug: ${errorText}`);
+    }
     
     // Update local cache
     _inventoryCache.push(entry);
@@ -98,7 +101,10 @@ export async function updateDrug(id, updates) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, updates })
     });
-    if (!res.ok) throw new Error('Failed to update drug');
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Failed to update drug: ${errorText}`);
+    }
     
     // Update local cache
     const index = _inventoryCache.findIndex(d => d.id === id);
@@ -126,7 +132,10 @@ export async function deleteDrug(id) {
     const res = await fetch(`/api/drugs?id=${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
-    if (!res.ok) throw new Error('Failed to delete drug');
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to delete drug: ${errorText}`);
+    }
     
     // Update local cache
     _inventoryCache = _inventoryCache.filter(d => d.id !== id);
@@ -145,7 +154,10 @@ export async function clearInventory() {
     const res = await fetch(`/api/drugs?crewId=${encodeURIComponent(crewId)}`, {
       method: 'DELETE'
     });
-    if (!res.ok) throw new Error('Failed to clear inventory');
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Failed to clear inventory: ${errorText}`);
+    }
     
     _inventoryCache = [];
   } catch (err) {
