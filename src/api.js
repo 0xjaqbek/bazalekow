@@ -98,8 +98,7 @@ export async function searchByEan(ean) {
   if (cleaned.length < 8 || cleaned.length > 14) {
     throw new Error('EAN musi mieć 8-14 cyfr.');
   }
-  // Zmiana na stabilniejszy endpoint search
-  return apiRequest(`/v1/drugs/search?query=${cleaned}`);
+  return apiRequest(`/v1/drugs/by-ean-page/${cleaned}?page=0&size=20`);
 }
 
 /**
@@ -113,7 +112,7 @@ export async function searchBySubstance(substance, page = 0, size = 20) {
  * Search drugs by product name.
  */
 export async function searchByName(name, page = 0, size = 20) {
-  return apiRequest(`/v1/drugs/search?query=${encodeURIComponent(name)}`);
+  return apiRequest(`/v1/drugs/by-nazwa-page/${encodeURIComponent(name)}?page=${page}&size=${size}`);
 }
 
 /**

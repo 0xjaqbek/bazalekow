@@ -3,12 +3,7 @@ export default async function handler(req, res) {
 
   if (!targetUrl) return res.status(400).json({ error: 'Brak URL' });
 
-  // 1. Sprawdzamy klucz w różnych miejscach (case-insensitive)
-  // Próbujemy małe litery, wielkie litery i zmienną środowiskową
-  const apiKey = req.headers['x-api-key'] ||
-    req.headers['X-API-Key'] ||
-    process.env.DRUGS_API_KEY ||
-    '4K2-BSyTP7OzEidtiiu7r5uHSJAI1oMukdmwvSPQ_sY'; // Wpisz tu świeży klucz na sztywno do testu
+  const apiKey = req.headers['x-api-key'] || process.env.DRUGS_API_KEY;
 
   if (!apiKey) {
     return res.status(401).json({ error: 'Proxy nadal nie widzi klucza API' });
@@ -18,12 +13,10 @@ export default async function handler(req, res) {
     const cleanUrl = decodeURIComponent(targetUrl);
     const finalUrl = new URL(cleanUrl);
 
-    // 2. Wstrzykujemy klucz bezpośrednio do parametrów URL (najpewniejsza metoda)
-    finalUrl.searchParams.set('apiKey', apiKey);
-
     const response = await fetch(finalUrl.toString(), {
       method: 'GET',
       headers: {
+        'X-API-Key': apiKey,
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0'
       },
@@ -31,7 +24,7 @@ export default async function handler(req, res) {
 
     const body = await response.text();
 
-    // 3. Obsługa specyficznych błędów DrugsAPI
+    // 2. Obsługa specyficznych błędów DrugsAPI
     if (body.includes('efbc7cfa')) {
       return res.status(403).json({ error: 'Blokada WAF Cloudflare' });
     }
