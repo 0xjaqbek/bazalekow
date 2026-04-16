@@ -1,63 +1,71 @@
 export default async function handler(req, res) {
-  const { path } = req.query;
-  
-  if (!path) {
-    return res.status(400).json({ error: 'Missing path parameter' });
+  // 1. Pobieramy pełną ścieżkę z zapytania (wszystko po /api/proxy?url=)
+  const { url: targetUrl } = req.query;
+
+  if (!targetUrl) {
+    return res.status(400).json({ error: 'Brak parametru url w zapytaniu proxy' });
   }
 
-  const BASE_URL = 'https://drugsapi.miniporadnia.pl';
-  const url = `${BASE_URL}${path}`;
-
-  const headers = {};
-  // Normalize headers (Node.js/Vercel normalizes keys to lowercase)
-  const apiKey = req.headers['x-api-key'];
-  const acceptHeader = req.headers['accept'] || 'application/json';
-  
-  if (apiKey) headers['X-API-Key'] = apiKey;
-  headers['Accept'] = acceptHeader;
-  headers['User-Agent'] = 'BazaLekowZRM/1.0 (Node.js Proxy)';
+  // 2. Przygotowujemy nagłówki - kluczowe dla uniknięcia blokady "bot"
+  const headers = {
+    // Przekazujemy klucz API wysłany z frontendu
+    'X-API-Key': req.headers['x-api-key'] || '',
+    'Accept': 'application/json',
+    // Używamy User-Agent popularnej przeglądarki, aby oszukać WAF/Cloudflare
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Referer': 'https://drugsapi.miniporadnia.pl/',
+    'Cache-Control': 'no-cache'
+  };
 
   try {
-    // Debug: echo the target URL
-    res.setHeader('X-Proxy-Target-URL', url);
-
-    const response = await fetch(url, {
+    // 3. Wykonujemy faktyczne zapytanie do DrugsAPI
+    const response = await fetch(targetUrl, {
       method: req.method,
-      headers
+      headers: headers,
     });
 
-    // proxy rate limit headers back to client
+    // 4. Pobieramy nagłówki limitów z odpowiedzi, aby frontend mógł je wyświetlić
     const rateLimitHeaders = [
-      'X-RateLimit-RPS-Limit', 
-      'X-RateLimit-RPS-Remaining', 
-      'X-RateLimit-Requests-Limit', 
-      'X-RateLimit-Requests-Remaining', 
-      'X-RateLimit-Records-Limit', 
-      'X-RateLimit-Records-Remaining', 
-      'Retry-After'
+      'x-ratelimit-rps-limit',
+      'x-ratelimit-rps-remaining',
+      'x-ratelimit-requests-limit',
+      'x-ratelimit-requests-remaining',
+      'x-ratelimit-records-limit',
+      'x-ratelimit-records-remaining',
+      'retry-after'
     ];
-    
+
     rateLimitHeaders.forEach(h => {
       const val = response.headers.get(h);
-      // Ensure lower case matching just in case
-      const valLower = response.headers.get(h.toLowerCase());
-      if (val) {
-        res.setHeader(h, val);
-      } else if (valLower) {
-        res.setHeader(h, valLower);
-      }
+      if (val) res.setHeader(h, val);
     });
 
+    // 5. Ustawiamy status i typ zawartości zgodny z tym, co zwróciło API
     res.status(response.status);
-    
     const contentType = response.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
+    if (contentType) res.setHeader('Content-Type', contentType);
+
+    // 6. Odczytujemy body jako tekst
+    const body = await response.text();
+
+    // Logika bezpieczeństwa: Jeśli serwer zwrócił dziwny kod zamiast JSON, 
+    // rzucamy błąd, aby frontend wiedział, że coś poszło nie tak.
+    if (body.includes('efbc7cfa') || body.startsWith('rs;')) {
+      console.error('Proxy: Wykryto blokadę Cloudflare/WAF');
+      return res.status(403).json({
+        error: 'Zapytanie zablokowane przez serwer bazy danych (Security Challenge).',
+        details: 'Spróbuj ponownie za chwilę lub sprawdź klucz API.'
+      });
     }
 
-    const body = await response.text();
     return res.send(body);
+
   } catch (err) {
-    return res.status(500).json({ error: 'Proxy implementation error', details: err.message });
+    console.error('Proxy Error:', err);
+    return res.status(500).json({
+      error: 'Błąd wewnętrzny proxy',
+      details: err.message
+    });
   }
 }

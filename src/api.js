@@ -1,8 +1,9 @@
 /**
  * DrugsAPI client for drugsapi.miniporadnia.pl
  */
+const BASE_URL = 'https://drugsapi.miniporadnia.pl';
+const PROXY_URL = '/api/proxy?url=';
 
-const PROXY_URL = '/api/proxy?path=';
 
 /**
  * Get the stored API key from localStorage.
@@ -34,7 +35,7 @@ async function apiRequest(endpoint) {
     throw new Error('Brak klucza API. Ustaw klucz w ustawieniach.');
   }
 
-  const response = await fetch(`${PROXY_URL}${encodeURIComponent(endpoint)}`, {
+  const response = await fetch(`${PROXY_URL}${encodeURIComponent(BASE_URL + endpoint)}`, {
     headers: {
       'X-API-Key': key,
       'Accept': 'application/json',
@@ -76,7 +77,7 @@ async function apiRequest(endpoint) {
       throw new Error(`Błąd parsowania JSON: ${err.message}. Treść: ${text.substring(0, 50)}`);
     }
   }
-  
+
   return { data, rateLimits };
 }
 
