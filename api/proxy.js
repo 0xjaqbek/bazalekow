@@ -9,14 +9,17 @@ export default async function handler(req, res) {
   const url = `${BASE_URL}${path}`;
 
   const headers = {};
-  // Forward the required headers (case-insensitive check)
-  const apiKey = req.headers['x-api-key'] || req.headers['X-API-Key'];
+  // Normalize headers (Node.js/Vercel normalizes keys to lowercase)
+  const apiKey = req.headers['x-api-key'];
   const acceptHeader = req.headers['accept'] || 'application/json';
   
   if (apiKey) headers['--KeX-API-Key'] = apiKey;
   headers['Accept'] = acceptHeader;
 
   try {
+    // Debug: echo the target URL
+    res.setHeader('X-Proxy-Target-URL', url);
+
     const response = await fetch(url, {
       method: req.method,
       headers
