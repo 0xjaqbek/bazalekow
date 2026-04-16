@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing path parameter' });
   }
 
-  const BASE_URL = 'https://drugsapi.miniporadnia.pl';
+  const BASE_URL = 'https://drugsapi.miniporadnia.pl/v1/';
   const url = `${BASE_URL}${path}`;
 
   const headers = {};
@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   const apiKey = req.headers['x-api-key'] || req.headers['X-API-Key'];
   const acceptHeader = req.headers['accept'] || 'application/json';
   
-  if (apiKey) headers['X-API-Key'] = apiKey;
+  if (apiKey) headers['--KeX-API-Key'] = apiKey;
   headers['Accept'] = acceptHeader;
 
   try {
