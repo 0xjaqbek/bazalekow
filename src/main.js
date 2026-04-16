@@ -185,6 +185,13 @@ async function toggleScanner() {
 }
 
 function onScanSuccess(decodedText, decodedResult) {
+  // Ignore scans if any modal is currently open
+  const scanModal = document.getElementById('scan-result-modal');
+  const settingsModal = document.getElementById('settings-modal');
+  if ((scanModal && !scanModal.hidden) || (settingsModal && !settingsModal.hidden)) {
+    return;
+  }
+
   // Cooldown to prevent rapid duplicate scans
   const now = Date.now();
   if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
