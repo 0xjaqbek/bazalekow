@@ -20,7 +20,14 @@ let currentLocationFilter = null; // null = all, 'ambulans', 'magazyn'
 let cameras = [];
 let selectedCameraId = null;
 let lastScanTime = 0;
-const SCAN_COOLDOWN_MS = 2000; // prevent duplicate scans
+const SCAN_COOLDOWN_MS = 2000;
+
+// Expose global helper for scan modal
+window.editLocalFromScan = (id) => {
+  document.getElementById('scan-result-modal').hidden = true;
+  lastScanTime = Date.now();
+  showEditModal(id);
+}; // prevent duplicate scans
 
 // ─── Toast Notifications ───
 function showToast(message, type = 'info', duration = 3500) {
@@ -228,6 +235,36 @@ function showScanResultModal(parsed) {
   title.textContent = parsed.ean ? 'Znaleziono kod' : 'Wynik skanu';
 
   let html = '<div class="scan-result">';
+
+  // ─── Local Inventory Match ───
+  const localInventory = searchInventory('');
+  const activeEans = [parsed.ean, parsed.gtin, parsed.ean ? '0' + parsed.ean : null].filter(Boolean);
+  const localMatches = localInventory.filter(d => d.ean && activeEans.includes(d.ean));
+
+  if (localMatches.length > 0) {
+    html += `
+      <div class="scan-local-matches" style="margin-bottom: var(--sp-sm); padding: var(--sp-xs); background: rgba(56, 189, 248, 0.1); border-left: 3px solid var(--color-primary); border-radius: var(--radius-sm);">
+        <h3 style="font-size: var(--font-sm); color: var(--color-primary); margin-bottom: var(--sp-xs);">W Twojej bazie:</h3>
+    `;
+    localMatches.forEach(item => {
+      const isAmbulans = item.location === 'ambulans';
+      html += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <div>
+            <div style="font-weight: 500; font-size: var(--font-sm);">${escapeHtml(item.substance)}</div>
+            <div style="font-size: var(--font-xs); color: var(--color-text-muted);">
+              ${escapeHtml(item.productName || '')} | ${escapeHtml(item.concentration || '')}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <span class="badge ${isAmbulans ? 'badge--warning' : 'badge--primary'}" style="margin-bottom: 4px;">${isAmbulans ? '🚑' : '🏢'} ${item.quantity} ${item.unit}</span><br/>
+            <button class="btn btn--link btn--sm" style="padding: 0;" onclick="window.editLocalFromScan('${item.id}')">Edytuj ilość &raquo;</button>
+          </div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
 
   // Parsed data section
   html += `
