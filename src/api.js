@@ -1,9 +1,8 @@
 /**
  * DrugsAPI client for drugsapi.miniporadnia.pl
  */
-const BASE_URL = 'https://drugsapi.miniporadnia.pl';
-const PROXY_URL = '/api/proxy?url=';
 
+const BASE_API_URL = 'https://drugsapi.miniporadnia.pl';
 
 /**
  * Get the stored API key from localStorage.
@@ -27,7 +26,7 @@ export function hasApiKey() {
 }
 
 /**
- * Make an authenticated request to the DrugsAPI.
+ * Make an authenticated request to the DrugsAPI via Vercel Proxy.
  */
 async function apiRequest(endpoint) {
   const key = getApiKey();
@@ -35,7 +34,13 @@ async function apiRequest(endpoint) {
     throw new Error('Brak klucza API. Ustaw klucz w ustawieniach.');
   }
 
-  const response = await fetch(`${PROXY_URL}${encodeURIComponent(BASE_URL + endpoint)}`, {
+  // Budujemy pełny docelowy URL do API
+  const targetUrl = `${BASE_API_URL}${endpoint}`;
+
+  // Przekazujemy go jako parametr do naszego proxy
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
+
+  const response = await fetch(proxyUrl, {
     headers: {
       'X-API-Key': key,
       'Accept': 'application/json',
@@ -61,65 +66,58 @@ async function apiRequest(endpoint) {
   }
 
   if (response.status === 401) {
-    throw new Error('Nieprawidłowy klucz API lub klucz wygasł.');
+    throw new Error('Nieprawidłowy klucz API lub klucz wygasł (401).');
+  }
+
+  if (response.status === 403) {
+    throw new Error('Zapytanie zablokowane przez zabezpieczenia serwera (403).');
   }
 
   if (!response.ok) {
-    throw new Error(`Błąd API: ${response.status} ${response.statusText}`);
+    throw new Error(`Błąd API: ${response.status}`);
   }
 
   const text = await response.text();
-  let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch (err) {
-      throw new Error(`Błąd parsowania JSON: ${err.message}. Treść: ${text.substring(0, 50)}`);
-    }
+  if (!text || text.trim().length === 0) {
+    return { data: null, rateLimits };
   }
 
-  return { data, rateLimits };
+  try {
+    const data = JSON.parse(text);
+    return { data, rateLimits };
+  } catch (err) {
+    throw new Error(`Błąd parsowania danych z API.`);
+  }
 }
 
 /**
  * Search drugs by EAN code.
- * @param {string} ean - EAN code (8-14 digits)
- * @param {number} page - Page number (0-based)
- * @param {number} size - Results per page (1-100)
  */
-export async function searchByEan(ean, page = 0, size = 20) {
+export async function searchByEan(ean) {
   const cleaned = ean.replace(/\D/g, '');
   if (cleaned.length < 8 || cleaned.length > 14) {
     throw new Error('EAN musi mieć 8-14 cyfr.');
   }
-  return apiRequest(`/v1/drugs/by-ean-page/${cleaned}?page=${page}&size=${size}`);
+  // Zmiana na stabilniejszy endpoint search
+  return apiRequest(`/v1/drugs/search?query=${cleaned}`);
 }
 
 /**
  * Search drugs by active substance name.
- * @param {string} substance - Substance name (3-120 chars)
  */
 export async function searchBySubstance(substance, page = 0, size = 20) {
-  if (substance.length < 3) {
-    throw new Error('Nazwa substancji musi mieć min. 3 znaki.');
-  }
   return apiRequest(`/v1/drugs/by-subst-page/${encodeURIComponent(substance)}?page=${page}&size=${size}`);
 }
 
 /**
  * Search drugs by product name.
- * @param {string} name - Product name (3-80 chars)
  */
 export async function searchByName(name, page = 0, size = 20) {
-  if (name.length < 3) {
-    throw new Error('Nazwa leku musi mieć min. 3 znaki.');
-  }
-  return apiRequest(`/v1/drugs/by-nazwa-page/${encodeURIComponent(name)}?page=${page}&size=${size}`);
+  return apiRequest(`/v1/drugs/search?query=${encodeURIComponent(name)}`);
 }
 
 /**
  * Get full drug record by ID.
- * @param {number} id - Drug record ID
  */
 export async function getDrugById(id) {
   return apiRequest(`/v1/drugs/${id}`);
@@ -133,13 +131,13 @@ export async function checkUsage() {
 }
 
 /**
- * Check if the API is reachable (public endpoint, no auth needed).
+ * Check if the API is reachable.
  */
 export async function healthCheck() {
   try {
-    const response = await fetch(`${PROXY_URL}${encodeURIComponent('/health/db')}`);
-    const text = await response.text();
-    return text.includes('ok');
+    const target = `${BASE_API_URL}/health/db`;
+    const response = await fetch(`/api/proxy?url=${encodeURIComponent(target)}`);
+    return response.ok;
   } catch {
     return false;
   }
