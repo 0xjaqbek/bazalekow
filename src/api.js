@@ -67,7 +67,16 @@ async function apiRequest(endpoint) {
     throw new Error(`Błąd API: ${response.status} ${response.statusText}`);
   }
 
-  const data = await response.json();
+  const text = await response.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`Błąd parsowania JSON: ${err.message}. Treść: ${text.substring(0, 50)}`);
+    }
+  }
+  
   return { data, rateLimits };
 }
 
