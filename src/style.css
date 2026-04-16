@@ -1085,3 +1085,461 @@ datalist {
   border: none !important;
   border-radius: 0 !important;
 }
+
+/* ============================================================
+   DASHBOARD & LOCATION SYSTEM
+   ============================================================ */
+
+/* --- Dashboard Summary Cards --- */
+.dashboard-section {
+  margin-bottom: var(--sp-lg);
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
+}
+
+.dash-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--sp-md);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.dash-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 0 0 0 100%;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.dash-card:hover {
+  border-color: var(--border-active);
+  transform: translateY(-1px);
+}
+
+.dash-card--ambulans {
+  border-left: 3px solid var(--color-primary);
+}
+.dash-card--ambulans::after {
+  background: var(--color-primary);
+}
+
+.dash-card--magazyn {
+  border-left: 3px solid var(--color-warning);
+}
+.dash-card--magazyn::after {
+  background: var(--color-warning);
+}
+
+.dash-card--alert {
+  border-left: 3px solid var(--color-accent);
+}
+.dash-card--alert::after {
+  background: var(--color-accent);
+}
+
+.dash-card--ok {
+  border-left: 3px solid var(--color-success);
+}
+.dash-card--ok::after {
+  background: var(--color-success);
+}
+
+.dash-card__icon {
+  font-size: 1.3rem;
+  margin-bottom: var(--sp-xs);
+}
+
+.dash-card__value {
+  font-size: var(--font-xl);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.dash-card__label {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.dash-card__sublabel {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--sp-xs);
+}
+
+/* Full-width card variant */
+.dash-card--full {
+  grid-column: 1 / -1;
+}
+
+/* --- Alert Banner --- */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  margin-bottom: var(--sp-sm);
+  animation: alert-pulse 3s infinite;
+}
+
+.alert-banner--danger {
+  background: hsla(0, 80%, 50%, 0.1);
+  border: 1px solid hsla(0, 80%, 50%, 0.3);
+  color: var(--color-accent);
+}
+
+.alert-banner--warning {
+  background: hsla(38, 92%, 55%, 0.08);
+  border: 1px solid hsla(38, 92%, 55%, 0.3);
+  color: var(--color-warning);
+}
+
+.alert-banner--info {
+  background: hsla(210, 100%, 56%, 0.08);
+  border: 1px solid hsla(210, 100%, 56%, 0.3);
+  color: var(--color-primary);
+}
+
+@keyframes alert-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* --- Location Tabs --- */
+.location-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: var(--sp-md);
+}
+
+.location-tab {
+  flex: 1;
+  padding: var(--sp-sm) var(--sp-md);
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-out);
+  text-align: center;
+  position: relative;
+}
+
+.location-tab:hover {
+  color: var(--text-secondary);
+}
+
+.location-tab.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.location-tab .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: hsla(210, 100%, 56%, 0.15);
+  color: var(--color-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.6rem;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.location-tab.active .tab-count {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* --- Location Badge --- */
+.location-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.location-badge--ambulans {
+  background: hsla(210, 100%, 56%, 0.12);
+  color: var(--color-primary);
+}
+
+.location-badge--magazyn {
+  background: hsla(38, 92%, 55%, 0.12);
+  color: var(--color-warning);
+}
+
+/* --- Transfer Button --- */
+.btn--transfer {
+  background: transparent;
+  border: 1px solid hsla(210, 100%, 56%, 0.3);
+  color: var(--color-primary);
+  font-size: var(--font-xs);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.btn--transfer:hover {
+  background: hsla(210, 100%, 56%, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary-glow);
+}
+
+.btn--transfer:active {
+  transform: scale(0.95);
+}
+
+/* --- Low Stock Indicator --- */
+.low-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  background: hsla(0, 80%, 50%, 0.12);
+  color: var(--color-accent);
+  animation: low-stock-pulse 2s infinite;
+}
+
+@keyframes low-stock-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.drug-card__detail-value--low-stock {
+  color: var(--color-accent) !important;
+  font-weight: 700;
+}
+
+/* --- Drug Card Location Row --- */
+.drug-card__location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-sm);
+  margin-top: var(--sp-sm);
+  padding-top: var(--sp-sm);
+  border-top: 1px solid hsla(220, 20%, 30%, 0.3);
+}
+
+/* --- Min Quantity Display --- */
+.min-qty-display {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
+
+/* --- Dashboard Alert List --- */
+.alert-drug-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+}
+
+.alert-drug-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-sm) var(--sp-md);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  border: 1px solid var(--border-color);
+  gap: var(--sp-sm);
+}
+
+.alert-drug-item__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.alert-drug-item__name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alert-drug-item__detail {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
+
+.alert-drug-item--expired {
+  border-left: 3px solid var(--color-accent);
+}
+
+.alert-drug-item--expiring {
+  border-left: 3px solid var(--color-warning);
+}
+
+.alert-drug-item--low-stock {
+  border-left: 3px solid hsl(20, 90%, 50%);
+}
+
+/* --- Dashboard Section Header --- */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-sm);
+}
+
+.section-header__title {
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
+.section-header__action {
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-weight: 600;
+}
+.section-header__action:hover {
+  text-decoration: underline;
+}
+
+/* --- Location Selector for Add Forms --- */
+.location-selector {
+  display: flex;
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
+}
+
+.location-selector__option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.location-selector__option:hover {
+  border-color: var(--border-active);
+  background: var(--bg-surface-hover);
+}
+
+.location-selector__option.selected {
+  border-color: var(--color-primary);
+  background: hsla(210, 100%, 56%, 0.08);
+  color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary-glow);
+}
+
+.location-selector__option.selected.loc-magazyn {
+  border-color: var(--color-warning);
+  background: hsla(38, 92%, 55%, 0.08);
+  color: var(--color-warning);
+  box-shadow: 0 0 0 1px var(--color-warning-glow);
+}
+
+.location-selector__option input[type="radio"] {
+  display: none;
+}
+
+/* --- Collapsible Section --- */
+.collapsible__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  width: 100%;
+  padding: var(--sp-sm) 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.collapsible__toggle::before {
+  content: '▸';
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.collapsible__toggle.expanded::before {
+  transform: rotate(90deg);
+}
+
+.collapsible__body {
+  overflow: hidden;
+  transition: max-height var(--duration-normal) var(--ease-out);
+}
+
+.collapsible__body.collapsed {
+  max-height: 0 !important;
+}
+
+/* --- Link Button --- */
+.btn--link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-xs) var(--sp-sm);
+  font-size: var(--font-sm);
+}
+.btn--link:hover {
+  color: var(--text-primary);
+}

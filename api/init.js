@@ -24,14 +24,19 @@ export default async function handler(req, res) {
         unit VARCHAR(50),
         source VARCHAR(50),
         api_drug_id INTEGER,
+        location VARCHAR(20) DEFAULT 'magazyn',
+        min_quantity INTEGER DEFAULT 5,
         added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
-    // Create an index on crew_id for faster lookups
+    // Create indexes for faster lookups
     await sql`
       CREATE INDEX IF NOT EXISTS idx_crew_id ON drugs(crew_id);
+    `;
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_crew_location ON drugs(crew_id, location);
     `;
 
     return res.status(200).json({ success: true, message: 'Database tables initialized successfully.' });

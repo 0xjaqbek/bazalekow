@@ -3,14 +3,19 @@ import { getDb } from './db.js';
 export default async function handler(req, res) {
   try {
     const sql = getDb();
-    // GET: Fetch all drugs for a specific crew
+    // GET: Fetch all drugs for a specific crew, optionally filtered by location
     if (req.method === 'GET') {
-      const { crewId } = req.query;
+      const { crewId, location } = req.query;
       if (!crewId) {
         return res.status(400).json({ error: 'crewId is required' });
       }
 
-      const rows = await sql`SELECT * FROM drugs WHERE crew_id = ${crewId} ORDER BY substance ASC, product_name ASC`;
+      let rows;
+      if (location) {
+        rows = await sql`SELECT * FROM drugs WHERE crew_id = ${crewId} AND location = ${location} ORDER BY substance ASC, product_name ASC`;
+      } else {
+        rows = await sql`SELECT * FROM drugs WHERE crew_id = ${crewId} ORDER BY substance ASC, product_name ASC`;
+      }
       
       // Map back from snake_case to camelCase
       const formatted = rows.map(r => ({
@@ -27,6 +32,8 @@ export default async function handler(req, res) {
         unit: r.unit,
         source: r.source,
         apiDrugId: r.api_drug_id,
+        location: r.location || 'magazyn',
+        minQuantity: r.min_quantity != null ? r.min_quantity : 5,
         addedAt: r.added_at,
         updatedAt: r.updated_at
       }));
@@ -44,10 +51,12 @@ export default async function handler(req, res) {
       await sql`
         INSERT INTO drugs (
           id, crew_id, substance, product_name, concentration, form, ean, 
-          expiry_date, batch_number, quantity, unit, source, api_drug_id, added_at, updated_at
+          expiry_date, batch_number, quantity, unit, source, api_drug_id,
+          location, min_quantity, added_at, updated_at
         ) VALUES (
           ${d.id}, ${d.crewId}, ${d.substance}, ${d.productName}, ${d.concentration}, ${d.form}, ${d.ean},
           ${d.expiryDate}, ${d.batchNumber}, ${d.quantity}, ${d.unit}, ${d.source}, ${d.apiDrugId}, 
+          ${d.location || 'magazyn'}, ${d.minQuantity != null ? d.minQuantity : 5},
           ${new Date(d.addedAt || Date.now())}, ${new Date(d.updatedAt || Date.now())}
         )
       `;
@@ -72,6 +81,8 @@ export default async function handler(req, res) {
           batch_number = COALESCE(${updates.batchNumber}, batch_number),
           quantity = COALESCE(${updates.quantity}, quantity),
           unit = COALESCE(${updates.unit}, unit),
+          location = COALESCE(${updates.location}, location),
+          min_quantity = COALESCE(${updates.minQuantity}, min_quantity),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ${id}
       `;

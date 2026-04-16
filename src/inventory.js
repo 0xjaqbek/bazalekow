@@ -1,9 +1,11 @@
 /**
  * Drug inventory manager — stores drug entries via Vercel Serverless API (Neon PostgreSQL).
+ * Supports dual-location: 'ambulans' (ambulance) and 'magazyn' (storeroom).
  */
 import { v4 as uuidv4 } from 'uuid';
 
 const CREW_KEY = 'bazalekow_crew_id';
+const DEFAULT_MIN_QUANTITY = 5;
 
 let _inventoryCache = [];
 
@@ -20,32 +22,43 @@ export function setCrewId(id) {
 
 /**
  * Get the currently cached inventory. Use this for synchronous operations like grouping.
+ * @param {string} [location] - Optional location filter ('ambulans' or 'magazyn')
  */
-export function getCachedInventory() {
-  return _inventoryCache || [];
+export function getCachedInventory(location) {
+  const cache = _inventoryCache || [];
+  if (!location) return cache;
+  return cache.filter(d => d.location === location);
 }
 
 /**
  * Fetch inventory from the database for the current crew.
+ * @param {string} [location] - Optional filter: 'ambulans' or 'magazyn'
  * @returns {Promise<Array>} Array of drug entries.
  */
-export async function loadInventory() {
+export async function loadInventory(location) {
   try {
     const crewId = getCrewId();
-    const res = await fetch(`/api/drugs?crewId=${encodeURIComponent(crewId)}`);
+    let url = `/api/drugs?crewId=${encodeURIComponent(crewId)}`;
+    if (location) url += `&location=${encodeURIComponent(location)}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch inventory');
     const data = await res.json();
-    _inventoryCache = data;
+    if (location) {
+      // Merge into cache: replace entries for this location, keep the rest
+      _inventoryCache = _inventoryCache.filter(d => d.location !== location).concat(data);
+    } else {
+      _inventoryCache = data;
+    }
     return data;
   } catch (err) {
     console.error('loadInventory error:', err);
-    return _inventoryCache; // Fallback to cache
+    return location ? getCachedInventory(location) : _inventoryCache;
   }
 }
 
 /**
  * Add a drug entry to the database.
- * @param {object} drug - Drug data
+ * @param {object} drug - Drug data (must include location)
  * @returns {Promise<object>} The created drug entry with ID
  */
 export async function addDrug(drug) {
@@ -62,8 +75,10 @@ export async function addDrug(drug) {
     batchNumber: drug.batchNumber || '',
     quantity: parseInt(drug.quantity, 10) || 1,
     unit: drug.unit || 'szt.',
-    source: drug.source || 'manual', // 'api' or 'manual'
+    source: drug.source || 'manual',
     apiDrugId: drug.apiDrugId || null,
+    location: drug.location || 'magazyn',
+    minQuantity: drug.minQuantity != null ? parseInt(drug.minQuantity, 10) : DEFAULT_MIN_QUANTITY,
     addedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -79,10 +94,7 @@ export async function addDrug(drug) {
       throw new Error(`Failed to add drug: ${errorText}`);
     }
     
-    // Update local cache
     _inventoryCache.push(entry);
-    
-    // Sort array
     _inventoryCache.sort((a, b) => a.substance.localeCompare(b.substance) || a.productName.localeCompare(b.productName));
   } catch (err) {
     console.error('addDrug error:', err);
@@ -110,6 +122,8 @@ export async function bulkAddDrugs(drugsArray) {
     unit: drug.unit || 'szt.',
     source: drug.source || 'api',
     apiDrugId: drug.apiDrugId || null,
+    location: drug.location || 'magazyn',
+    minQuantity: drug.minQuantity != null ? parseInt(drug.minQuantity, 10) : DEFAULT_MIN_QUANTITY,
     addedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }));
@@ -128,7 +142,6 @@ export async function bulkAddDrugs(drugsArray) {
     
     const { count } = await res.json();
     
-    // Push successful entries to cache
     _inventoryCache.push(...entries);
     _inventoryCache.sort((a, b) => a.substance.localeCompare(b.substance) || a.productName.localeCompare(b.productName));
     
@@ -142,7 +155,7 @@ export async function bulkAddDrugs(drugsArray) {
 /**
  * Update an existing drug entry in the database.
  * @param {string} id - Drug entry ID
- * @param {object} updates - Fields to update
+ * @param {object} updates - Fields to update (can include location, minQuantity)
  * @returns {Promise<object|null>} Updated entry or null if not found
  */
 export async function updateDrug(id, updates) {
@@ -157,7 +170,6 @@ export async function updateDrug(id, updates) {
       throw new Error(`Failed to update drug: ${errorText}`);
     }
     
-    // Update local cache
     const index = _inventoryCache.findIndex(d => d.id === id);
     if (index !== -1) {
       _inventoryCache[index] = {
@@ -175,6 +187,15 @@ export async function updateDrug(id, updates) {
 }
 
 /**
+ * Transfer a drug to another location.
+ * @param {string} id - Drug entry ID
+ * @param {string} targetLocation - 'ambulans' or 'magazyn'
+ */
+export async function transferDrug(id, targetLocation) {
+  return updateDrug(id, { location: targetLocation });
+}
+
+/**
  * Delete a drug entry from the database.
  * @param {string} id - Drug entry ID
  */
@@ -188,7 +209,6 @@ export async function deleteDrug(id) {
         throw new Error(`Failed to delete drug: ${errorText}`);
     }
     
-    // Update local cache
     _inventoryCache = _inventoryCache.filter(d => d.id !== id);
   } catch (err) {
     console.error('deleteDrug error:', err);
@@ -219,17 +239,17 @@ export async function clearInventory() {
 
 /**
  * Get cached inventory grouped by substance.
+ * @param {string} [location] - Optional location filter
  * @returns {object} { substanceName: [drugEntries] }
  */
-export function getGroupedInventory() {
-  const drugs = getCachedInventory();
+export function getGroupedInventory(location) {
+  const drugs = getCachedInventory(location);
   const grouped = {};
   for (const drug of drugs) {
     const key = drug.substance || 'Nieprzypisane';
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(drug);
   }
-  // Sort groups alphabetically
   const sorted = {};
   for (const key of Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'pl'))) {
     sorted[key] = grouped[key];
@@ -240,10 +260,11 @@ export function getGroupedInventory() {
 /**
  * Search cached inventory.
  * @param {string} query - Search query
+ * @param {string} [location] - Optional location filter
  * @returns {Array} Matching drug entries
  */
-export function searchInventory(query) {
-  const cache = getCachedInventory();
+export function searchInventory(query, location) {
+  const cache = getCachedInventory(location);
   if (!query || query.length < 2) return cache;
   const q = query.toLowerCase();
   return cache.filter(d =>
@@ -264,8 +285,6 @@ export async function importDrugs(importedDrugs, replace = false) {
     await clearInventory();
   }
   
-  // This could be optimized into a single bulk insert in the API, 
-  // but for simplicity we iterate.
   const existingIds = new Set(getCachedInventory().map(d => d.id));
   
   for (const drug of importedDrugs) {
@@ -274,7 +293,6 @@ export async function importDrugs(importedDrugs, replace = false) {
     }
   }
   
-  // Reload full fresh state
   await loadInventory();
 }
 
@@ -293,4 +311,78 @@ export function getExpiryStatus(expiryDate) {
   if (diffDays < 0) return 'expired';
   if (diffDays < 30) return 'expiring';
   return 'ok';
+}
+
+/**
+ * Check if a drug is low on stock.
+ * @param {object} drug - Drug entry with quantity and minQuantity
+ * @returns {boolean}
+ */
+export function isLowStock(drug) {
+  const min = drug.minQuantity != null ? drug.minQuantity : DEFAULT_MIN_QUANTITY;
+  return (drug.quantity || 0) <= min;
+}
+
+/**
+ * Get summary stats for a location (or all).
+ * @param {string} [location] - 'ambulans', 'magazyn', or undefined for all
+ * @returns {object} { total, expired, expiring, lowStock, ok }
+ */
+export function getLocationStats(location) {
+  const drugs = getCachedInventory(location);
+  const stats = { total: drugs.length, expired: 0, expiring: 0, lowStock: 0, ok: 0 };
+  
+  for (const drug of drugs) {
+    const expiryStatus = getExpiryStatus(drug.expiryDate);
+    if (expiryStatus === 'expired') stats.expired++;
+    else if (expiryStatus === 'expiring') stats.expiring++;
+    
+    if (isLowStock(drug)) stats.lowStock++;
+    else stats.ok++;
+  }
+  
+  return stats;
+}
+
+/**
+ * Get drugs with alerts (expired, expiring soon, or low stock).
+ * @param {string} [location] - Optional location filter
+ * @returns {Array} Drugs with alert info
+ */
+export function getAlertDrugs(location) {
+  const drugs = getCachedInventory(location);
+  return drugs
+    .map(drug => {
+      const expiryStatus = getExpiryStatus(drug.expiryDate);
+      const lowStock = isLowStock(drug);
+      if (expiryStatus === 'expired' || expiryStatus === 'expiring' || lowStock) {
+        return { ...drug, expiryStatus, lowStock };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      // Expired first, then expiring, then low stock
+      const priority = { expired: 0, expiring: 1, ok: 2, unknown: 3 };
+      const pa = priority[a.expiryStatus] ?? 3;
+      const pb = priority[b.expiryStatus] ?? 3;
+      if (pa !== pb) return pa - pb;
+      if (a.lowStock && !b.lowStock) return -1;
+      if (!a.lowStock && b.lowStock) return 1;
+      return 0;
+    });
+}
+
+/**
+ * Run database migration to add location and min_quantity columns.
+ */
+export async function runMigration() {
+  try {
+    const res = await fetch('/api/migrate', { method: 'POST' });
+    if (!res.ok) throw new Error('Migration failed');
+    return await res.json();
+  } catch (err) {
+    console.error('Migration error:', err);
+    throw err;
+  }
 }

@@ -7,14 +7,16 @@ import { getCameras, startScanner, stopScanner, isScannerRunning } from './scann
 import { parseScan } from './gs1-parser.js';
 import * as api from './api.js';
 import {
-  loadInventory, addDrug, updateDrug, deleteDrug, clearInventory,
-  getGroupedInventory, searchInventory, getExpiryStatus, getCrewId, setCrewId, bulkAddDrugs
+  loadInventory, addDrug, updateDrug, deleteDrug, clearInventory, transferDrug,
+  getGroupedInventory, searchInventory, getExpiryStatus, isLowStock,
+  getCrewId, setCrewId, bulkAddDrugs, getLocationStats, getAlertDrugs, runMigration
 } from './inventory.js';
 import { exportInventory, importInventoryFile } from './data-io.js';
 import { ZRM_SUBSTANCES, DRUG_FORMS, DRUG_UNITS } from './substances.js';
 
 // ─── State ───
 let currentView = 'scanner';
+let currentLocationFilter = null; // null = all, 'ambulans', 'magazyn'
 let cameras = [];
 let selectedCameraId = null;
 let lastScanTime = 0;
@@ -336,6 +338,17 @@ async function lookupDrugByEan(parsed) {
           </p>
           
           <div class="quick-add-form" style="text-align:left;">
+             <div class="form-group" style="margin-bottom:var(--sp-xs)">
+                <label style="font-size:var(--font-xs)">Lokalizacja</label>
+                <div class="location-selector" id="quick-loc-selector">
+                  <label class="location-selector__option selected loc-magazyn" data-loc="magazyn">
+                    <input type="radio" name="quick-loc" value="magazyn" checked /> 🏢
+                  </label>
+                  <label class="location-selector__option" data-loc="ambulans">
+                    <input type="radio" name="quick-loc" value="ambulans" /> 🚑
+                  </label>
+                </div>
+             </div>
              <div class="form-group">
                 <label style="font-size:var(--font-xs)">Substancja czynna</label>
                 <input type="text" class="input" id="quick-substance" list="quick-substances-list" placeholder="np. Adrenalinum" />
@@ -372,6 +385,10 @@ async function lookupDrugByEan(parsed) {
                   </select>
                 </div>
              </div>
+             <div class="form-group" style="margin-top:var(--sp-xs);">
+                <label style="font-size:var(--font-xs)">Min. ilość (alert)</label>
+                <input type="number" class="input" id="quick-min-qty" value="5" min="0" />
+             </div>
              <button class="btn btn--success btn--block mt-md" id="btn-quick-add-confirm">✓ Dodaj do magazynu</button>
              <button class="btn btn--link btn--block mt-sm" id="btn-cancel-quick-add" style="font-size:var(--font-xs)">Anuluj</button>
           </div>
@@ -381,6 +398,19 @@ async function lookupDrugByEan(parsed) {
       document.getElementById('btn-cancel-quick-add').onclick = () => {
         document.getElementById('scan-result-modal').hidden = true;
       };
+
+      // Wire up location selector
+      const quickLocOptions = section.querySelectorAll('#quick-loc-selector .location-selector__option');
+      if (quickLocOptions.length > 0) {
+        quickLocOptions.forEach(opt => {
+          opt.addEventListener('click', () => {
+            quickLocOptions.forEach(o => o.classList.remove('selected', 'loc-magazyn'));
+            opt.classList.add('selected');
+            if (opt.dataset.loc === 'magazyn') opt.classList.add('loc-magazyn');
+            opt.querySelector('input').checked = true;
+          });
+        });
+      }
 
       document.getElementById('btn-quick-add-confirm').onclick = async (e) => {
         const name = document.getElementById('quick-name').value.trim();
@@ -394,6 +424,7 @@ async function lookupDrugByEan(parsed) {
         btn.textContent = 'Trwa dodawanie...';
 
         try {
+          const newDrugLoc = section.querySelector('input[name="quick-loc"]:checked');
           const newDrug = {
             substance: document.getElementById('quick-substance').value.trim(),
             productName: name,
@@ -404,6 +435,8 @@ async function lookupDrugByEan(parsed) {
             batchNumber: parsed.batchNumber || '',
             quantity: parseInt(document.getElementById('quick-qty').value, 10) || 1,
             unit: document.getElementById('quick-unit').value,
+            location: newDrugLoc ? newDrugLoc.value : 'magazyn',
+            minQuantity: parseInt(document.getElementById('quick-min-qty').value, 10) || 5,
             source: 'manual_from_scan'
           };
 
@@ -432,6 +465,17 @@ async function lookupDrugByEan(parsed) {
             ${escapeHtml(drug.substCzynna || '')} · ${escapeHtml(drug.dawka || '')} · ${escapeHtml(drug.postac || '')}
           </div>
           <div class="add-to-inventory-form" id="add-form-${i}" hidden>
+            <div class="form-group" style="margin-bottom:var(--sp-xs)">
+              <label style="font-size:var(--font-xs)">Lokalizacja</label>
+              <div class="location-selector" id="loc-sel-${i}" style="margin-bottom:var(--sp-xs)">
+                <label class="location-selector__option selected loc-magazyn" data-loc="magazyn" onclick="this.parentNode.querySelectorAll('.location-selector__option').forEach(o=>o.classList.remove('selected', 'loc-magazyn')); this.classList.add('selected', 'loc-magazyn'); this.querySelector('input').checked=true">
+                  <input type="radio" name="loc-${i}" value="magazyn" checked /> 🏢
+                </label>
+                <label class="location-selector__option" data-loc="ambulans" onclick="this.parentNode.querySelectorAll('.location-selector__option').forEach(o=>o.classList.remove('selected', 'loc-magazyn')); this.classList.add('selected'); this.querySelector('input').checked=true">
+                  <input type="radio" name="loc-${i}" value="ambulans" /> 🚑
+                </label>
+              </div>
+            </div>
             <div class="form-row">
               <div class="form-group" style="margin-bottom:0">
                 <label>Ilość</label>
@@ -443,6 +487,10 @@ async function lookupDrugByEan(parsed) {
                   ${DRUG_UNITS.map(u => `<option value="${u}">${u}</option>`).join('')}
                 </select>
               </div>
+            </div>
+            <div class="form-group" style="margin-top:var(--sp-xs); margin-bottom:var(--sp-xs);">
+                <label style="font-size:var(--font-xs)">Min. ilość</label>
+                <input type="number" class="input" id="min-qty-${i}" value="5" min="0" />
             </div>
             <button class="btn btn--success btn--block" id="confirm-add-${i}">✓ Dodaj do magazynu</button>
           </div>
@@ -476,6 +524,9 @@ async function lookupDrugByEan(parsed) {
         e.stopPropagation();
         const qty = parseInt(document.getElementById(`qty-${i}`).value, 10) || 1;
         const unit = document.getElementById(`unit-${i}`).value;
+        const minQty = parseInt(document.getElementById(`min-qty-${i}`).value, 10) || 5;
+        const locInput = section.querySelector(`input[name="loc-${i}"]:checked`);
+        const loc = locInput ? locInput.value : 'magazyn';
 
         addDrug({
           substance: drug.substCzynna || '',
@@ -487,6 +538,8 @@ async function lookupDrugByEan(parsed) {
           batchNumber: parsed.batch || '',
           quantity: qty,
           unit: unit,
+          location: loc,
+          minQuantity: minQty,
           source: 'api',
           apiDrugId: drug.id,
         });
@@ -506,48 +559,114 @@ async function lookupDrugByEan(parsed) {
   }
 }
 
-// ─── INVENTORY VIEW ───
+// ─── INVENTORY VIEW (with merged dashboard) ───
 async function renderInventoryView(container) {
   container.innerHTML = '<div class="loading-row mt-md"><div class="spinner spinner--sm"></div><span>Ładowanie bazy danych...</span></div>';
   
   await loadInventory();
   
-  const inventory = searchInventory(''); // Get from cache
-  const grouped = getGroupedInventory();
+  const ambStats = getLocationStats('ambulans');
+  const magStats = getLocationStats('magazyn');
+  const allStats = getLocationStats();
+  const alerts = getAlertDrugs();
+  
+  const filteredDrugs = searchInventory('', currentLocationFilter);
+  const grouped = getGroupedInventory(currentLocationFilter);
   const substanceCount = Object.keys(grouped).length;
 
-  let html = `
-    <div class="inventory-view">
-      <div class="inventory-header">
-        <div class="inventory-search">
-          <svg class="inventory-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input type="text" class="input" id="inventory-search-input" placeholder="Szukaj leku..." />
+  let html = `<div class="inventory-view">`;
+  
+  // ── Dashboard Summary Cards ──
+  html += `
+    <div class="dashboard-section">
+      <div class="dashboard-cards">
+        <div class="dash-card dash-card--ambulans">
+          <div class="dash-card__icon">🚑</div>
+          <div class="dash-card__value">${ambStats.total}</div>
+          <div class="dash-card__label">Ambulans</div>
+          ${ambStats.expired > 0 ? `<div class="dash-card__sublabel" style="color:var(--color-accent)">⚠️ ${ambStats.expired} przetermin.</div>` : ''}
+          ${ambStats.lowStock > 0 ? `<div class="dash-card__sublabel" style="color:var(--color-warning)">📉 ${ambStats.lowStock} niski stan</div>` : ''}
         </div>
-        <div class="inventory-stats">
-          <span class="inventory-stats__item">💊 ${inventory.length} lek(ów)</span>
-          <span class="inventory-stats__item">📦 ${substanceCount} substancji</span>
+        <div class="dash-card dash-card--magazyn">
+          <div class="dash-card__icon">🏢</div>
+          <div class="dash-card__value">${magStats.total}</div>
+          <div class="dash-card__label">Magazyn</div>
+          ${magStats.expired > 0 ? `<div class="dash-card__sublabel" style="color:var(--color-accent)">⚠️ ${magStats.expired} przetermin.</div>` : ''}
+          ${magStats.lowStock > 0 ? `<div class="dash-card__sublabel" style="color:var(--color-warning)">📉 ${magStats.lowStock} niski stan</div>` : ''}
         </div>
       </div>
-      <div id="inventory-list">
   `;
 
-  if (inventory.length === 0) {
+  // ── Alerts ──
+  if (alerts.length > 0) {
+    const expiredCount = alerts.filter(a => a.expiryStatus === 'expired').length;
+    const expiringCount = alerts.filter(a => a.expiryStatus === 'expiring').length;
+    const lowStockCount = alerts.filter(a => a.lowStock).length;
+    
+    if (expiredCount > 0) {
+      html += `<div class="alert-banner alert-banner--danger">⚠️ ${expiredCount} lek(ów) przeterminowanych!</div>`;
+    }
+    if (expiringCount > 0) {
+      html += `<div class="alert-banner alert-banner--warning">⏰ ${expiringCount} lek(ów) kończy ważność w ciągu 30 dni</div>`;
+    }
+    if (lowStockCount > 0) {
+      html += `<div class="alert-banner alert-banner--info">📉 ${lowStockCount} lek(ów) z niskim stanem magazynowym</div>`;
+    }
+  }
+  
+  html += `</div>`; // end dashboard-section
+
+  // ── Search ──
+  html += `
+    <div class="inventory-header">
+      <div class="inventory-search">
+        <svg class="inventory-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" class="input" id="inventory-search-input" placeholder="Szukaj leku..." />
+      </div>
+    </div>
+  `;
+
+  // ── Location Tabs ──
+  html += `
+    <div class="location-tabs" id="location-tabs">
+      <button class="location-tab ${!currentLocationFilter ? 'active' : ''}" data-location="">
+        Wszystko <span class="tab-count">${allStats.total}</span>
+      </button>
+      <button class="location-tab ${currentLocationFilter === 'ambulans' ? 'active' : ''}" data-location="ambulans">
+        🚑 Ambulans <span class="tab-count">${ambStats.total}</span>
+      </button>
+      <button class="location-tab ${currentLocationFilter === 'magazyn' ? 'active' : ''}" data-location="magazyn">
+        🏢 Magazyn <span class="tab-count">${magStats.total}</span>
+      </button>
+    </div>
+  `;
+
+  // ── Drug List ──
+  html += `<div id="inventory-list">`;
+  if (filteredDrugs.length === 0) {
     html += `
       <div class="empty-state">
         <div class="empty-state__icon">📋</div>
-        <p class="empty-state__text">Magazyn jest pusty. Zeskanuj kod DataMatrix lub dodaj lek ręcznie.</p>
+        <p class="empty-state__text">Brak leków${currentLocationFilter ? ` w lokalizacji "${currentLocationFilter === 'ambulans' ? 'Ambulans' : 'Magazyn'}"` : ''}. Zeskanuj kod lub dodaj ręcznie.</p>
       </div>
     `;
   } else {
     html += renderGroupedDrugs(grouped);
   }
-
   html += '</div></div>';
   container.innerHTML = html;
 
-  // Search
+  // ── Location Tab Handlers ──
+  document.querySelectorAll('.location-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentLocationFilter = tab.dataset.location || null;
+      renderInventoryView(container);
+    });
+  });
+
+  // ── Search Handler ──
   const searchInput = document.getElementById('inventory-search-input');
   let searchTimeout;
   searchInput.addEventListener('input', () => {
@@ -556,7 +675,7 @@ async function renderInventoryView(container) {
       const query = searchInput.value.trim();
       const list = document.getElementById('inventory-list');
       if (query.length >= 2) {
-        const results = searchInventory(query);
+        const results = searchInventory(query, currentLocationFilter);
         const tempGrouped = {};
         results.forEach(d => {
           const k = d.substance || 'Nieprzypisane';
@@ -567,7 +686,7 @@ async function renderInventoryView(container) {
           ? renderGroupedDrugs(tempGrouped)
           : '<div class="empty-state"><p class="empty-state__text">Brak wyników</p></div>';
       } else {
-        list.innerHTML = renderGroupedDrugs(getGroupedInventory());
+        list.innerHTML = renderGroupedDrugs(getGroupedInventory(currentLocationFilter));
       }
       attachCardListeners();
     }, 300);
@@ -588,18 +707,22 @@ function renderGroupedDrugs(grouped) {
     `;
     for (const drug of drugs) {
       const expiryStatus = getExpiryStatus(drug.expiryDate);
+      const lowStock = isLowStock(drug);
       const cardClass = expiryStatus === 'expired' ? 'drug-card--expired'
         : expiryStatus === 'expiring' ? 'drug-card--expiring' : '';
       const expiryClass = expiryStatus === 'expired' ? 'drug-card__detail-value--expiry-expired'
         : expiryStatus === 'expiring' ? 'drug-card__detail-value--expiry-expiring' : '';
-      const sourceClass = drug.source === 'api' ? 'drug-card__source--api' : 'drug-card__source--manual';
-      const sourceLabel = drug.source === 'api' ? 'API' : 'Ręcznie';
+      const qtyClass = lowStock ? 'drug-card__detail-value--low-stock' : '';
+      const loc = drug.location || 'magazyn';
+      const locLabel = loc === 'ambulans' ? '🚑 Ambulans' : '🏢 Magazyn';
+      const transferTarget = loc === 'ambulans' ? 'magazyn' : 'ambulans';
+      const transferLabel = loc === 'ambulans' ? '→ Magazyn' : '→ Ambulans';
 
       html += `
         <div class="drug-card ${cardClass}" data-drug-id="${drug.id}">
           <div class="drug-card__top">
             <span class="drug-card__name">${escapeHtml(drug.productName || drug.substance)}</span>
-            <span class="drug-card__source ${sourceClass}">${sourceLabel}</span>
+            <span class="location-badge location-badge--${loc}">${locLabel}</span>
           </div>
           <div class="drug-card__details">
             <div class="drug-card__detail">
@@ -607,8 +730,8 @@ function renderGroupedDrugs(grouped) {
               <span class="drug-card__detail-value">${escapeHtml(drug.concentration || '—')}</span>
             </div>
             <div class="drug-card__detail">
-              <span class="drug-card__detail-label">Ilość</span>
-              <span class="drug-card__detail-value">${drug.quantity || '—'} ${escapeHtml(drug.unit || '')}</span>
+              <span class="drug-card__detail-label">Ilość ${lowStock ? '<span class="low-stock-badge">⚠ NISKI</span>' : ''}</span>
+              <span class="drug-card__detail-value ${qtyClass}">${drug.quantity || '—'} ${escapeHtml(drug.unit || '')} <span class="min-qty-display">(min: ${drug.minQuantity != null ? drug.minQuantity : 5})</span></span>
             </div>
             <div class="drug-card__detail">
               <span class="drug-card__detail-label">Ważność</span>
@@ -620,6 +743,7 @@ function renderGroupedDrugs(grouped) {
             </div>
           </div>
           <div class="drug-card__actions">
+            <button class="btn--transfer btn-transfer-drug" data-id="${drug.id}" data-target="${transferTarget}" title="Przenieś do ${transferLabel}">🔄 ${transferLabel}</button>
             <button class="btn btn--outline btn--sm btn-edit-drug" data-id="${drug.id}">✏️ Edytuj</button>
             <button class="btn btn--danger btn--sm btn-delete-drug" data-id="${drug.id}">🗑 Usuń</button>
           </div>
@@ -657,8 +781,29 @@ function attachCardListeners() {
   document.querySelectorAll('.btn-edit-drug').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      showEditModal(btn.dataset.id);
+    });
+  });
+
+  // Transfer buttons
+  document.querySelectorAll('.btn-transfer-drug').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const id = btn.dataset.id;
-      showEditModal(id);
+      const target = btn.dataset.target;
+      const targetLabel = target === 'ambulans' ? 'Ambulans' : 'Magazyn';
+      
+      btn.innerHTML = '<div class="spinner spinner--sm"></div>';
+      btn.disabled = true;
+      try {
+        await transferDrug(id, target);
+        showToast(`Przeniesiono do: ${targetLabel}`, 'success');
+        renderInventoryView(document.getElementById('main-content'));
+      } catch (err) {
+        showToast('Błąd transferu: ' + err.message, 'error');
+        btn.innerHTML = `🔄 → ${targetLabel}`;
+        btn.disabled = false;
+      }
     });
   });
 }
@@ -677,6 +822,19 @@ function showEditModal(drugId) {
 
   body.innerHTML = `
     <div class="scan-result">
+      <div class="form-group">
+        <label>Lokalizacja</label>
+        <div class="location-selector" id="edit-location-selector">
+          <label class="location-selector__option ${(drug.location || 'magazyn') === 'magazyn' ? 'selected loc-magazyn' : ''}" data-loc="magazyn">
+            <input type="radio" name="edit-location" value="magazyn" ${(drug.location || 'magazyn') === 'magazyn' ? 'checked' : ''} />
+            🏢 Magazyn
+          </label>
+          <label class="location-selector__option ${drug.location === 'ambulans' ? 'selected' : ''}" data-loc="ambulans">
+            <input type="radio" name="edit-location" value="ambulans" ${drug.location === 'ambulans' ? 'checked' : ''} />
+            🚑 Ambulans
+          </label>
+        </div>
+      </div>
       <div class="form-group">
         <label for="edit-substance">Substancja</label>
         <input type="text" class="input" id="edit-substance" value="${escapeHtml(drug.substance)}" list="edit-substances-list" />
@@ -727,11 +885,26 @@ function showEditModal(drugId) {
           </select>
         </div>
       </div>
+      <div class="form-group">
+        <label for="edit-min-qty">Min. ilość (próg alertu)</label>
+        <input type="number" class="input" id="edit-min-qty" value="${drug.minQuantity != null ? drug.minQuantity : 5}" min="0" />
+        <small class="form-hint">Alert pojawi się gdy ilość ≤ tej wartości</small>
+      </div>
       <button class="btn btn--success btn--block" id="btn-save-edit">💾 Zapisz zmiany</button>
     </div>
   `;
 
   modal.hidden = false;
+
+  // Wire up location selector toggle
+  document.querySelectorAll('#edit-location-selector .location-selector__option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('#edit-location-selector .location-selector__option').forEach(o => o.classList.remove('selected', 'loc-magazyn'));
+      opt.classList.add('selected');
+      if (opt.dataset.loc === 'magazyn') opt.classList.add('loc-magazyn');
+      opt.querySelector('input').checked = true;
+    });
+  });
 
   document.getElementById('scan-result-close').onclick = () => modal.hidden = true;
   modal.onclick = (e) => { if (e.target === modal) modal.hidden = true; };
@@ -740,6 +913,8 @@ function showEditModal(drugId) {
     const btn = e.target;
     btn.disabled = true;
     btn.textContent = 'Trwa zapisywanie...';
+    
+    const selectedLocation = document.querySelector('input[name="edit-location"]:checked');
     
     try {
       await updateDrug(drugId, {
@@ -752,6 +927,8 @@ function showEditModal(drugId) {
         batchNumber: document.getElementById('edit-batch').value.trim(),
         quantity: parseInt(document.getElementById('edit-qty').value, 10) || 1,
         unit: document.getElementById('edit-unit').value,
+        location: selectedLocation ? selectedLocation.value : (drug.location || 'magazyn'),
+        minQuantity: parseInt(document.getElementById('edit-min-qty').value, 10) || 5,
       });
       modal.hidden = true;
       showToast('Lek zaktualizowany', 'success');
@@ -771,6 +948,19 @@ function renderManualView(container) {
   container.innerHTML = `
     <div class="manual-view">
       <h2>Dodaj lek ręcznie</h2>
+      <div class="form-group">
+        <label>Lokalizacja</label>
+        <div class="location-selector" id="manual-location-selector">
+          <label class="location-selector__option selected loc-magazyn" data-loc="magazyn">
+            <input type="radio" name="manual-location" value="magazyn" checked />
+            🏢 Magazyn
+          </label>
+          <label class="location-selector__option" data-loc="ambulans">
+            <input type="radio" name="manual-location" value="ambulans" />
+            🚑 Ambulans
+          </label>
+        </div>
+      </div>
       <div class="form-group">
         <label for="manual-substance">Substancja czynna *</label>
         <input type="text" class="input" id="manual-substance" list="substances-list" placeholder="Wpisz lub wybierz..." />
@@ -824,6 +1014,11 @@ function renderManualView(container) {
           </select>
         </div>
       </div>
+      <div class="form-group">
+        <label for="manual-min-qty">Min. ilość (próg alertu)</label>
+        <input type="number" class="input" id="manual-min-qty" value="5" min="0" />
+        <small class="form-hint">Alert pojawi się gdy ilość ≤ tej wartości</small>
+      </div>
 
       <div id="api-search-results" hidden></div>
 
@@ -843,6 +1038,16 @@ function renderManualView(container) {
     </div>
   `;
 
+  // Wire up location selector
+  document.querySelectorAll('#manual-location-selector .location-selector__option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('#manual-location-selector .location-selector__option').forEach(o => o.classList.remove('selected', 'loc-magazyn'));
+      opt.classList.add('selected');
+      if (opt.dataset.loc === 'magazyn') opt.classList.add('loc-magazyn');
+      opt.querySelector('input').checked = true;
+    });
+  });
+
   // Add manual drug
   document.getElementById('btn-add-manual').addEventListener('click', async (e) => {
     const substance = document.getElementById('manual-substance').value.trim();
@@ -855,6 +1060,8 @@ function renderManualView(container) {
     btn.disabled = true;
     btn.textContent = 'Trwa dodawanie...';
 
+    const selectedLocation = document.querySelector('input[name="manual-location"]:checked');
+
     try {
       await addDrug({
         substance,
@@ -866,6 +1073,8 @@ function renderManualView(container) {
         batchNumber: document.getElementById('manual-batch').value.trim(),
         quantity: parseInt(document.getElementById('manual-qty').value, 10) || 1,
         unit: document.getElementById('manual-unit').value,
+        location: selectedLocation ? selectedLocation.value : 'magazyn',
+        minQuantity: parseInt(document.getElementById('manual-min-qty').value, 10) || 5,
         source: 'manual',
       });
 
@@ -1156,6 +1365,9 @@ function init() {
 
   // Settings button
   document.getElementById('btn-settings').addEventListener('click', openSettings);
+
+  // Run migration silently (adds location + min_quantity columns if missing)
+  runMigration().catch(err => console.warn('Migration skipped:', err.message));
 
   // Check if API key is set; if not, show prompt
   if (!api.hasApiKey()) {
