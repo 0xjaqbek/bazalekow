@@ -321,13 +321,17 @@ async function lookupDrugByEan(parsed) {
 
     // 2nd attempt: If 1st failed and we have alternatives
     if (drugs.length === 0) {
+      const waitRPS = () => new Promise(resolve => setTimeout(resolve, 1100)); // wait >1s to respect API RPS limits
+
       if (parsed.gtin && parsed.ean && usedEan !== parsed.ean) {
         // Try the 13-digit version if we haven't yet
+        await waitRPS();
         const res2 = await api.searchByEan(parsed.ean);
         drugs = res2.data || [];
         if (drugs.length > 0) usedEan = parsed.ean;
       } else if (!parsed.gtin && parsed.ean && parsed.ean.length === 13) {
         // Try padding with high-level 0 just in case
+        await waitRPS();
         const padded = '0' + parsed.ean;
         const res3 = await api.searchByEan(padded);
         drugs = res3.data || [];
@@ -562,7 +566,11 @@ async function lookupDrugByEan(parsed) {
         <button class="btn btn--outline mt-md" id="btn-retry-lookup">Ponów</button>
       </div>
     `;
-    document.getElementById('btn-retry-lookup').onclick = () => lookupDrugByEan(parsed);
+    document.getElementById('btn-retry-lookup').onclick = (e) => {
+      e.target.disabled = true;
+      e.target.textContent = 'Trwa...';
+      setTimeout(() => lookupDrugByEan(parsed), 1000);
+    };
   }
 }
 
